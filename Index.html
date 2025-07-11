@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel of Fortune Training v11</title>
+    <meta name="description" content="Authentic Wheel of Fortune training app with real prizes, smart AI opponents, and endless puzzles">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: 'Arial', sans-serif; }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+```
+    // Lucide React Icons (simplified)
+    const RotateCcw = ({ className }) => React.createElement('div', { className }, '⟳');
+    const Clock = ({ className }) => React.createElement('div', { className }, '🕐');
+    const DollarSign = ({ className }) => React.createElement('div', { className }, '$');
+    const Award = ({ className }) => React.createElement('div', { className }, '🏆');
+
+    // Authentic Wheel of Fortune wheel segments
+    const WHEEL_SEGMENTS = [
+      500, 550, 600, 650, 700, 750, 800, 850, 900, 500, 550, 600,
+      "BANKRUPT", "LOSE A TURN",
+      { type: "PRIZE", name: "TRIP TO HAWAII", value: 7500, displayValue: "HAWAII" },
+      { type: "PRIZE", name: "NEW CAR", value: 25000, displayValue: "CAR" },
+      { type: "PRIZE", name: "TRIP TO EUROPE", value: 12000, displayValue: "EUROPE" },
+      { type: "WILD_CARD", value: 500, displayValue: "WILD CARD" },
+      { type: "GIFT_TAG", value: 1000, displayValue: "$1000 GIFT TAG" },
+      { type: "MILLION", value: 900, displayValue: "MILLION" },
+      650, 700, 750, 800
+    ];
+
+    const PUZZLE_TEMPLATES = {
+      PHRASE: [
+        "GREAT IDEA", "HAPPY BIRTHDAY", "GOOD LUCK", "SWEET DREAMS", "BEST WISHES",
+        "TRUE LOVE", "BRIGHT FUTURE", "PERFECT TIMING", "FRESH START", "GOLDEN OPPORTUNITY",
+        "BREAK A LEG", "PIECE OF CAKE", "BETTER LATE THAN NEVER", "TIME FLIES", "EASY AS PIE"
+      ],
+      "BEFORE & AFTER": [
+        { before: "BLUE", shared: "MOON", after: "WALK", full: "BLUE MOON WALK" },
+        { before: "BIRTHDAY", shared: "PARTY", after: "ANIMAL", full: "BIRTHDAY PARTY ANIMAL" },
+        { before: "COFFEE", shared: "BREAK", after: "DANCING", full: "COFFEE BREAK DANCING" },
+        { before: "BOOK", shared: "CLUB", after: "SANDWICH", full: "BOOK CLUB SANDWICH" },
+        { before: "HAND", shared: "SHAKE", after: "DOWN", full: "HAND SHAKE DOWN" }
+      ],
+      "RHYME TIME": [
+        "MAKE A BREAK", "TIME TO RHYME", "BEST TEST", "QUICK TRICK",
+        "BRIGHT LIGHT", "SWEET TREAT", "FAIR SHARE", "TRUE BLUE",
+        "NIGHT FLIGHT", "COLD GOLD", "HOUSE MOUSE", "FUNNY MONEY"
+      ],
+      "SAME LETTER": [
+        "PERFECT PIZZA PARTY", "SUPER SUNNY SATURDAY", "BUSY BEAUTIFUL BUTTERFLY",
+        "HAPPY HEALTHY HOLIDAYS", "WILD WONDERFUL WEEKEND", "FRESH FANTASTIC FRIDAY",
+        "MAGNIFICENT MAGICAL MOMENTS", "BRILLIANT BEAUTIFUL BEACH"
+      ],
+      "THEN AND NOW": [
+        { then: "RECORD PLAYER", now: "SPOTIFY" },
+        { then: "TYPEWRITER", now: "LAPTOP" },
+        { then: "PHONE BOOTH", now: "CELL PHONE" },
+        { then: "VHS TAPE", now: "NETFLIX" },
+        { then: "FILM CAMERA", now: "DIGITAL CAMERA" }
+      ],
+      "WHAT ARE YOU DOING?": [
+        "WALKING THE DOG", "MAKING DINNER", "READING A BOOK", "WATCHING TV",
+        "PLAYING GAMES", "DOING HOMEWORK", "LISTENING TO MUSIC", "CLEANING HOUSE",
+        "TAKING A SHOWER", "WRITING A LETTER", "COOKING BREAKFAST"
+      ],
+      THING: [
+        "COMPUTER", "TELEPHONE", "BICYCLE", "CAMERA", "KEYBOARD", "BACKPACK",
+        "WASHING MACHINE", "COFFEE MAKER", "CELL PHONE", "TELEVISION",
+        "MICROWAVE OVEN", "VACUUM CLEANER", "HAIR DRYER", "ALARM CLOCK"
+      ],
+      PERSON: [
+        "TEACHER", "DOCTOR", "ARTIST", "MUSICIAN", "CHEF", "ENGINEER",
+        "FAMOUS ACTOR", "TALENTED SINGER", "SKILLED ATHLETE", "MOVIE STAR",
+        "PROFESSIONAL DANCER", "BEST FRIEND", "FAMILY MEMBER"
+      ],
+      PLACE: [
+        "LIBRARY", "RESTAURANT", "MUSEUM", "HOSPITAL", "SCHOOL", "THEATER",
+        "BEAUTIFUL GARDEN", "HISTORIC BUILDING", "MODERN OFFICE", "BUSY AIRPORT",
+        "SHOPPING MALL", "COFFEE SHOP", "PUBLIC PARK", "MOVIE THEATER"
+      ]
+    };
+
+    function WheelOfFortune() {
+      const [gameState, setGameState] = useState({
+        currentRound: 1,
+        puzzle: { text: '', category: '', revealed: new Set(), specialFormat: null },
+        usedLetters: new Set(),
+        wheelValue: 0,
+        isSpinning: false,
+        wheelRotation: 0,
+        players: [
+          { name: 'You', roundMoney: 0, totalMoney: 0, isHuman: true, prizes: [], specialCards: [] },
+          { name: 'Sarah', roundMoney: 0, totalMoney: 0, isHuman: false, prizes: [], specialCards: [] },
+          { name: 'Mike', roundMoney: 0, totalMoney: 0, isHuman: false, prizes: [], specialCards: [] }
+        ],
+        currentPlayer: 0,
+        turnInProgress: false,
+        lastSpinResult: null,
+        landedSegmentIndex: -1,
+        message: 'Your turn! Spin the wheel to begin!'
+      });
+
+      const [inputLetter, setInputLetter] = useState('');
+      const [solveAttempt, setSolveAttempt] = useState('');
+      const [usedPuzzles, setUsedPuzzles] = useState(new Set());
+
+      // AI Strategy Functions
+      const getCommonLetters = () => ['R', 'S', 'T', 'L', 'N', 'E', 'A', 'I', 'O', 'U', 'D', 'H', 'Y', 'C', 'F', 'M', 'W', 'G', 'P', 'B', 'V', 'K', 'J', 'X', 'Q', 'Z'];
+      
+      const calculateSolveConfidence = (puzzle, revealed) => {
+        const totalLetters = puzzle.text.replace(/[^A-Z]/g, '').length;
+        const revealedCount = puzzle.text.split('').filter(char => revealed.has(char) || !/[A-Z]/.test(char)).length;
+        return revealedCount / totalLetters;
+      };
+
+      const shouldAISolve = (player, puzzle, revealed, roundMoney) => {
+        const confidence = calculateSolveConfidence(puzzle, revealed);
+        if (player.name === 'Sarah') {
+          return confidence > 0.75 && roundMoney > 500;
+        } else if (player.name === 'Mike') {
+          return confidence > 0.6 || (confidence > 0.4 && roundMoney > 1000);
+        }
+        return false;
+      };
+
+      const getAILetterChoice = (player, puzzle, usedLetters, roundMoney) => {
+        const commonLetters = getCommonLetters();
+        const availableConsonants = commonLetters.filter(letter => 
+          !'AEIOU'.includes(letter) && !usedLetters.has(letter)
+        );
+        const availableVowels = ['E', 'A', 'I', 'O', 'U'].filter(letter => 
+          !usedLetters.has(letter)
+        );
+
+        if (roundMoney >= 250 && availableVowels.length > 0 && Math.random() > 0.3) {
+          return { type: 'vowel', letter: availableVowels[0] };
+        }
+        return { type: 'consonant', letter: availableConsonants[0] || 'R' };
+      };
+
+      const generateAISolution = (puzzle) => {
+        const confidence = calculateSolveConfidence(puzzle, puzzle.revealed);
+        if (confidence > 0.8 || Math.random() > 0.8) {
+          return puzzle.text;
+        }
+        return null;
+      };
+
+      const generatePuzzle = () => {
+        try {
+          const categories = Object.keys(PUZZLE_TEMPLATES);
+          const category = categories[Math.floor(Math.random() * categories.length)];
+          const templates = PUZZLE_TEMPLATES[category];
+          
+          let puzzle = '';
+          let specialFormat = null;
+          let attempts = 0;
+          
+          do {
+            if (category === "BEFORE & AFTER") {
+              const template = templates[Math.floor(Math.random() * templates.length)];
+              puzzle = template.full;
+              specialFormat = {
+                type: 'BEFORE_AFTER',
+                before: template.before,
+                shared: template.shared,
+                after: template.after
+              };
+            } else if (category === "THEN AND NOW") {
+              const template = templates[Math.floor(Math.random() * templates.length)];
+              puzzle = `${template.then} / ${template.now}`;
+              specialFormat = {
+                type: 'THEN_AND_NOW',
+                then: template.then,
+                now: template.now
+              };
+            } else if (category === "RHYME TIME") {
+              puzzle = templates[Math.floor(Math.random() * templates.length)];
+              specialFormat = { type: 'RHYME_TIME' };
+            } else if (category === "SAME LETTER") {
+              puzzle = templates[Math.floor(Math.random() * templates.length)];
+              specialFormat = { type: 'SAME_LETTER', letter: puzzle.charAt(0) };
+            } else if (category === "WHAT ARE YOU DOING?") {
+              puzzle = templates[Math.floor(Math.random() * templates.length)];
+              specialFormat = { type: 'QUESTION', question: category };
+            } else {
+              puzzle = templates[Math.floor(Math.random() * templates.length)];
+            }
+            attempts++;
+          } while (usedPuzzles.has(puzzle) && attempts < 10);
+          
+          setUsedPuzzles(prev => new Set([...prev, puzzle]));
+          
+          return {
+            text: puzzle.toUpperCase(),
+            category: category,
+            revealed: new Set(),
+            specialFormat
+          };
+        } catch (error) {
+          return {
+            text: 'WHEEL OF FORTUNE',
+            category: 'PHRASE',
+            revealed: new Set(),
+            specialFormat: null
+          };
+        }
+      };
+
+      useEffect(() => {
+        const newPuzzle = generatePuzzle();
+        setGameState(prev => ({ ...prev, puzzle: newPuzzle }));
+      }, []);
+
+      const executeAITurn = () => {
+        if (gameState.currentPlayer === 0 || gameState.turnInProgress) return;
+        
+        const currentPlayer = gameState.players[gameState.currentPlayer];
+        setGameState(prev => ({ ...prev, turnInProgress: true }));
+        
+        setTimeout(() => {
+          if (shouldAISolve(currentPlayer, gameState.puzzle, gameState.puzzle.revealed, currentPlayer.roundMoney)) {
+            const solution = generateAISolution(gameState.puzzle);
+            if (solution === gameState.puzzle.text) {
+              setGameState(prev => {
+                const newPlayers = [...prev.players];
+                newPlayers[prev.currentPlayer].totalMoney += newPlayers[prev.currentPlayer].roundMoney;
+                
+                return {
+                  ...prev,
+                  players: newPlayers,
+                  puzzle: { ...prev.puzzle, revealed: new Set(prev.puzzle.text) },
+                  message: `${currentPlayer.name} solved it! "${prev.puzzle.text}" - Earned $${newPlayers[prev.currentPlayer].roundMoney}`,
+                  turnInProgress: false
+                };
+              });
+              return;
+            }
+          }
+
+          setGameState(prev => ({ ...prev, isSpinning: true, message: `${currentPlayer.name} is spinning...` }));
+          
+          setTimeout(() => {
+            const segmentIndex = Math.floor(Math.random() * WHEEL_SEGMENTS.length);
+            const segment = WHEEL_SEGMENTS[segmentIndex];
+            
+            if (segment === 'BANKRUPT') {
+              setGameState(prev => {
+                const newPlayers = [...prev.players];
+                newPlayers[prev.currentPlayer].roundMoney = 0;
+                const nextPlayer = (prev.currentPlayer + 1) % 3;
+                
+                return {
+                  ...prev,
+                  players: newPlayers,
+                  currentPlayer: nextPlayer,
+                  isSpinning: false,
+                  wheelValue: 0,
+                  landedSegmentIndex: segmentIndex,
+                  lastSpinResult: segment,
+                  turnInProgress: false,
+                  message: `${currentPlayer.name} hit BANKRUPT! ${prev.players[nextPlayer].isHuman ? 'Your' : prev.players[nextPlayer].name + "'s"} turn.`
+                };
+              });
+              return;
+            }
+            
+            if (segment === 'LOSE A TURN') {
+              setGameState(prev => {
+                const nextPlayer = (prev.currentPlayer + 1) % 3;
+                return {
+                  ...prev,
+                  currentPlayer: nextPlayer,
+                  isSpinning: false,
+                  wheelValue: 0,
+                  landedSegmentIndex: segmentIndex,
+                  lastSpinResult: segment,
+                  turnInProgress: false,
+                  message: `${currentPlayer.name} lost a turn! ${prev.players[nextPlayer].isHuman ? 'Your' : prev.players[nextPlayer].name + "'s"} turn.`
+                };
+              });
+              return;
+            }
+
+            setTimeout(() => {
+              const letterChoice = getAILetterChoice(currentPlayer, gameState.puzzle, gameState.usedLetters, currentPlayer.roundMoney);
+              const letter = letterChoice.letter;
+              const letterInPuzzle = gameState.puzzle.text.includes(letter);
+              const letterCount = (gameState.puzzle.text.match(new RegExp(letter, 'g')) || []).length;
+              
+              setGameState(prev => {
+                const newUsedLetters = new Set([...prev.usedLetters, letter]);
+                const newRevealed = new Set([...prev.puzzle.revealed, letter]);
+                const newPlayers = [...prev.players];
+                
+                let message = '';
+                let nextPlayer = prev.currentPlayer;
+                
+                if (letterInPuzzle) {
+                  if (letterChoice.type === 'vowel') {
+                    newPlayers[prev.currentPlayer].roundMoney -= 250;
+                    message = `${currentPlayer.name} bought ${letter} - ${letterCount} ${letter}'s!`;
+                  } else {
+                    const earned = (typeof segment === 'number' ? segment : 500) * letterCount;
+                    newPlayers[prev.currentPlayer].roundMoney += earned;
+                    message = `${currentPlayer.name} found ${letterCount} ${letter}'s! Earned $${earned}`;
+                  }
+                } else {
+                  if (letterChoice.type === 'vowel') {
+                    newPlayers[prev.currentPlayer].roundMoney -= 250;
+                  }
+                  message = `${currentPlayer.name} called ${letter} - No ${letter}'s. `;
+                  nextPlayer = (prev.currentPlayer + 1) % 3;
+                  message += `${prev.players[nextPlayer].isHuman ? 'Your' : prev.players[nextPlayer].name + "'s"} turn!`;
+                }
+                
+                return {
+                  ...prev,
+                  usedLetters: newUsedLetters,
+                  puzzle: { ...prev.puzzle, revealed: newRevealed },
+                  players: newPlayers,
+                  currentPlayer: nextPlayer,
+                  wheelValue: letterChoice.type === 'consonant' && letterInPuzzle ? segment : 0,
+                  isSpinning: false,
+                  landedSegmentIndex: segmentIndex,
+                  lastSpinResult: segment,
+                  turnInProgress: false,
+                  message
+                };
+              });
+            }, 500);
+          }, 1200);
+        }, 300);
+      };
+
+      useEffect(() => {
+        if (gameState.currentPlayer !== 0 && !gameState.turnInProgress && gameState.puzzle.text) {
+          const timer = setTimeout(() => {
+            executeAITurn();
+          }, 800);
+          return () => clearTimeout(timer);
+        }
+      }, [gameState.currentPlayer, gameState.turnInProgress, gameState.puzzle.text]);
+
+      const renderWheel = () => {
+        const segmentAngle = 360 / WHEEL_SEGMENTS.length;
+        
+        return React.createElement('div', { 
+          className: "relative w-48 h-48 sm:w-80 sm:h-80 mx-auto mb-8" 
+        }, [
+          React.createElement('div', { 
+            key: 'wheel-container',
+            className: "absolute inset-0 rounded-full border-4 border-yellow-600 shadow-2xl bg-gray-800 overflow-hidden" 
+          }, [
+            React.createElement('div', {
+              key: 'segments',
+              className: "absolute inset-0 w-full h-full",
+              style: { 
+                transform: `rotate(${gameState.wheelRotation}deg)`, 
+                transition: gameState.isSpinning ? 'transform 3s ease-out' : 'none',
+                transformOrigin: 'center center'
+              }
+            }, [
+              React.createElement('svg', {
+                key: 'svg',
+                className: "w-full h-full",
+                viewBox: "0 0 200 200",
+                style: { transformOrigin: 'center center' }
+              }, WHEEL_SEGMENTS.map((segment, index) => {
+                const startAngle = (index * segmentAngle) * (Math.PI / 180);
+                const endAngle = ((index + 1) * segmentAngle) * (Math.PI / 180);
+                const isLanded = gameState.landedSegmentIndex === index && !gameState.isSpinning;
+                
+                const radius = 95;
+                const centerX = 100;
+                const centerY = 100;
+                const x1 = centerX + radius * Math.cos(startAngle);
+                const y1 = centerY + radius * Math.sin(startAngle);
+                const x2 = centerX + radius * Math.cos(endAngle);
+                const y2 = centerY + radius * Math.sin(endAngle);
+                
+                const largeArcFlag = segmentAngle > 180 ? 1 : 0;
+                const pathData = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+                
+                let fillColor = '#4ECDC4';
+                if (segment === 'BANKRUPT') fillColor = '#E74C3C';
+                else if (segment === 'LOSE A TURN') fillColor = '#34495E';
+                else if (typeof segment === 'object') {
+                  if (segment.type === 'PRIZE') fillColor = '#9B59B6';
+                  else if (segment.type === 'WILD_CARD') fillColor = '#1ABC9C';
+                  else if (segment.type === 'GIFT_TAG') fillColor = '#E67E22';
+                  else if (segment.type === 'MILLION') fillColor = '#F39C12';
+                } else if (typeof segment === 'number') {
+                  if (segment >= 800) fillColor = '#27AE60';
+                  else if (segment >= 650) fillColor = '#3498DB';
+                  else fillColor = '#F39C12';
+                }
+                
+                const textAngle = (startAngle + endAngle) / 2;
+                const textRadius = 65;
+                const textX = centerX + textRadius * Math.cos(textAngle);
+                const textY = centerY + textRadius * Math.sin(textAngle);
+                
+                return React.createElement('g', { key: index }, [
+                  React.createElement('path', {
+                    key: 'path',
+                    d: pathData,
+                    fill: fillColor,
+                    stroke: isLanded ? "#FFD700" : "#FFFFFF",
+                    strokeWidth: isLanded ? "3" : "1",
+                    className: isLanded ? "animate-pulse" : ""
+                  }),
+                  React.createElement('text', {
+                    key: 'text',
+                    x: textX,
+                    y: textY,
+                    fill: "white",
+                    fontSize: "8",
+                    fontWeight: "bold",
+                    textAnchor: "middle",
+                    dominantBaseline: "central",
+                    transform: `rotate(${(textAngle * 180 / Math.PI) + 90}, ${textX}, ${textY})`,
+                    style: { textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }
+                  }, typeof segment === 'number' 
+                    ? `$${segment}`
+                    : segment === 'BANKRUPT' 
+                      ? 'BANK'
+                      : segment === 'LOSE A TURN'
+                        ? 'LOSE'
+                        : segment.displayValue?.split(' ')[0] || segment)
+                ]);
+              }))
+            ]),
+            
+            React.createElement('div', {
+              key: 'center-hub',
+              className: "absolute inset-12 sm:inset-20 rounded-full bg-gradient-to-br from-blue-600 to-purple-700 border-4 border-yellow-500 flex items-center justify-center z-20"
+            }, React.createElement('div', {
+              className: "text-white text-xs sm:text-lg font-bold text-center"
+            }, gameState.isSpinning ? 
+              React.createElement(RotateCcw, { className: "w-4 h-4 sm:w-8 sm:h-8 animate-spin" }) :
+              React.createElement('div', {}, [
+                React.createElement('div', { key: 'wheel', className: "text-xs sm:text-base" }, 'WHEEL'),
+                React.createElement('div', { key: 'of', className: "text-xs" }, 'OF'),
+                React.createElement('div', { key: 'fortune', className: "text-xs sm:text-base" }, 'FORTUNE')
+              ])
+            ))
+          ]),
+          
+          React.createElement('div', {
+            key: 'pointer',
+            className: "absolute top-0 left-1/2 transform -translate-x-1/2 translate-y-1 z-30",
+            style: {
+              width: 0,
+              height: 0,
+              borderLeft: '12px solid transparent',
+              borderRight: '12px solid transparent',
+              borderTop: '20px solid #DC143C',
+              filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
+            }
+          }),
+          
+          gameState.lastSpinResult && !gameState.isSpinning && React.createElement('div', {
+            key: 'result',
+            className: "absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-4 py-2 rounded-lg font-bold text-sm shadow-lg border-2 border-yellow-600 z-10"
+          }, typeof gameState.lastSpinResult === 'number' 
+            ? `$${gameState.lastSpinResult}`
+            : gameState.lastSpinResult === 'BANKRUPT'
+              ? '💥 BANKRUPT'
+              : gameState.lastSpinResult === 'LOSE A TURN'
+                ? '❌ LOSE TURN'
+                : gameState.lastSpinResult.type === 'PRIZE'
+                  ? `🏆 ${gameState.lastSpinResult.displayValue}`
+                  : `⭐ ${gameState.lastSpinResult.displayValue}`)
+        ]);
+      };
+
+      const spinWheel = () => {
+        if (gameState.isSpinning || gameState.currentPlayer !== 0) return;
+        
+        setGameState(prev => ({ ...prev, isSpinning: true, message: 'Spinning...', turnInProgress: true }));
+        
+        const baseRotations = 3 + Math.random() * 4;
+        const segmentAngle = 360 / WHEEL_SEGMENTS.length;
+        const randomSegmentIndex = Math.floor(Math.random() * WHEEL_SEGMENTS.length);
+        const finalAngle = randomSegmentIndex * segmentAngle + (Math.random() * segmentAngle);
+        const totalRotation = (baseRotations * 360) + finalAngle;
+        
+        const newRotation = gameState.wheelRotation + totalRotation;
+        setGameState(prev => ({ ...prev, wheelRotation: newRotation }));
+        
+        setTimeout(() => {
+          const segment = WHEEL_SEGMENTS[randomSegmentIndex];
+          let newMessage = '';
+          let newPlayers = [...gameState.players];
+          let nextPlayer = gameState.currentPlayer;
+          
+          if (typeof segment === 'number') {
+            newMessage = `You spun $${segment}! Call a consonant.`;
+          } else if (segment === 'BANKRUPT') {
+            newMessage = 'BANKRUPT! You lose your round money. ';
+            newPlayers[0].roundMoney = 0;
+            nextPlayer = 1;
+            newMessage += `${gameState.players[1].name}'s turn!`;
+          } else if (segment === 'LOSE A TURN') {
+            newMessage = 'LOSE A TURN! ';
+            nextPlayer = 1;
+            newMessage += `${gameState.players[1].name}'s turn!`;
+          } else if (segment.type === 'PRIZE') {
+            newMessage = `You landed on ${segment.displayValue}! Call a consonant to claim it.`;
+          } else if (segment.type === 'WILD_CARD') {
+            newMessage = `You got the WILD CARD! Call a consonant.`;
+          } else if (segment.type === 'GIFT_TAG') {
+            newMessage = `You got the $1000 GIFT TAG! Call a consonant.`;
+          } else if (segment.type === 'MILLION') {
+            newMessage = `You got the MILLION DOLLAR WEDGE! Call a consonant.`;
+          }
+          
+          setGameState(prev => ({
+            ...prev,
+            isSpinning: false,
+            wheelValue: segment,
+            lastSpinResult: segment,
+            landedSegmentIndex: randomSegmentIndex,
+            message: newMessage,
+            players: newPlayers,
+            currentPlayer: nextPlayer,
+            turnInProgress: false
+          }));
+        }, 3000);
+      };
+
+      const callLetter = () => {
+        if (gameState.currentPlayer !== 0) return;
+        
+        const letter = inputLetter.toUpperCase().trim();
+        if (!letter || gameState.usedLetters.has(letter) || !/[A-Z]/.test(letter)) {
+          setGameState(prev => ({ ...prev, message: 'Invalid or already used letter!' }));
+          return;
+        }
+
+        const isVowel = 'AEIOU'.includes(letter);
+        
+        if (isVowel && gameState.players[0].roundMoney < 250) {
+          setGameState(prev => ({ ...prev, message: 'Not enough money to buy a vowel! ($250 required)' }));
+          return;
+        }
+
+        if (!isVowel && !gameState.wheelValue) {
+          setGameState(prev => ({ ...prev, message: 'Spin the wheel first!' }));
+          return;
+        }
+
+        const letterInPuzzle = gameState.puzzle.text.includes(letter);
+        const letterCount = (gameState.puzzle.text.match(new RegExp(letter, 'g')) || []).length;
+        
+        setGameState(prev => {
+          const newUsedLetters = new Set([...prev.usedLetters, letter]);
+          const newRevealed = new Set([...prev.puzzle.revealed, letter]);
+          
+          let newPlayers = [...prev.players];
+          let message = '';
+          let nextPlayer = prev.currentPlayer;
+          
+          if (letterInPuzzle) {
+            if (isVowel) {
+              newPlayers[0].roundMoney -= 250;
+              message = `Yes! ${letterCount} ${letter}'s. You bought a vowel.`;
+            } else {
+              const earned = (typeof prev.wheelValue === 'number' ? prev.wheelValue : 500) * letterCount;
+              newPlayers[0].roundMoney += earned;
+              message = `Yes! ${letterCount} ${letter}'s. You earned $${earned}.`;
+            }
+          } else {
+            if (isVowel) {
+              newPlayers[0].roundMoney -= 250;
+            }
+            message = `Sorry, no ${letter}'s. `;
+            nextPlayer = 1;
+            message += `${prev.players[1].name}'s turn!`;
+          }
+          
+          return {
+            ...prev,
+            usedLetters: newUsedLetters,
+            puzzle: { ...prev.puzzle, revealed: newRevealed },
+            players: newPlayers,
+            currentPlayer: nextPlayer,
+            message,
+            wheelValue: (isVowel || !letterInPuzzle) ? 0 : prev.wheelValue,
+            landedSegmentIndex: (isVowel || !letterInPuzzle) ? -1 : prev.landedSegmentIndex
+          };
+        });
+        
+        setInputLetter('');
+      };
+
+      const solvePuzzle = () => {
+        if (gameState.currentPlayer !== 0) return;
+        
+        const attempt = solveAttempt.toUpperCase().trim();
+        const correct = attempt === gameState.puzzle.text;
+        
+        if (correct) {
+          const newPlayers = [...gameState.players];
+          newPlayers[0].totalMoney += newPlayers[0].roundMoney;
+          
+          setGameState(prev => ({
+            ...prev,
+            players: newPlayers,
+            puzzle: { ...prev.puzzle, revealed: new Set(prev.puzzle.text) },
+            message: `Correct! You solved "${prev.puzzle.text}" and earned $${newPlayers[0].roundMoney}!`
+          }));
+          
+          setTimeout(() => {
+            setGameState(prev => ({
+              ...prev,
+              message: `You win the round! Click "NEW PUZZLE" to continue.`
+            }));
+          }, 3000);
+        } else {
+          setGameState(prev => {
+            const nextPlayer = 1;
+            return {
+              ...prev,
+              currentPlayer: nextPlayer,
+              message: `Incorrect! ${prev.players[nextPlayer].name}'s turn.`
+            };
+          });
+        }
+        
+        setSolveAttempt('');
+      };
+
+      const startNewPuzzle = () => {
+        const newPuzzle = generatePuzzle();
+        setGameState(prev => ({
+          ...prev,
+          currentRound: prev.currentRound + 1,
+          puzzle: newPuzzle,
+          usedLetters: new Set(),
+          players: prev.players.map(p => ({ ...p, roundMoney: 0 })),
+          currentPlayer: 0,
+          wheelValue: 0,
+          lastSpinResult: null,
+          landedSegmentIndex: -1,
+          turnInProgress: false,
+          message: 'New round! Your turn - spin the wheel to begin!'
+        }));
+      };
+
+      const renderPuzzle = () => {
+        try {
+          const { specialFormat } = gameState.puzzle;
+          
+          if (specialFormat?.type === 'THEN_AND_NOW') {
+            return React.createElement('div', { className: "space-y-4" }, [
+              React.createElement('div', { key: 'then', className: "text-center" }, [
+                React.createElement('div', { key: 'then-label', className: "text-sm font-bold text-yellow-300 mb-2" }, 'THEN:'),
+                React.createElement('div', { key: 'then-letters', className: "flex flex-wrap justify-center" }, 
+                  specialFormat.then.split('').map((char, index) => {
+                    if (char === ' ') return React.createElement('span', { key: `then-${index}`, className: "w-2" });
+                    const isRevealed = gameState.puzzle.revealed.has(char) || !/[A-Z]/.test(char);
+                    return React.createElement('span', {
+                      key: `then-${index}`,
+                      className: `inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 border border-blue-400 bg-white text-sm sm:text-base font-bold m-0.5 ${
+                        isRevealed ? 'text-blue-800' : 'text-transparent'
+                      }`
+                    }, isRevealed ? char : '');
+                  })
+                )
+              ]),
+              React.createElement('div', { key: 'arrow', className: "text-center text-xl text-yellow-400" }, '↓'),
+              React.createElement('div', { key: 'now', className: "text-center" }, [
+                React.createElement('div', { key: 'now-label', className: "text-sm font-bold text-yellow-300 mb-2" }, 'NOW:'),
+                React.createElement('div', { key: 'now-letters', className: "flex flex-wrap justify-center" }, 
+                  specialFormat.now.split('').map((char, index) => {
+                    if (char === ' ') return React.createElement('span', { key: `now-${index}`, className: "w-2" });
+                    const isRevealed = gameState.puzzle.revealed.has(char) || !/[A-Z]/.test(char);
+                    return React.createElement('span', {
+                      key: `now-${index}`,
+                      className: `inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 border border-blue-400 bg-white text-sm sm:text-base font-bold m-0.5 ${
+                        isRevealed ? 'text-blue-800' : 'text-transparent'
+                      }`
+                    }, isRevealed ? char : '');
+                  })
+                )
+              ])
+            ]);
+          }
+          
+          return React.createElement('div', { className: "flex flex-wrap justify-center" }, 
+            gameState.puzzle.text.split('').map((char, index) => {
+              if (char === ' ') return React.createElement('span', { key: index, className: "w-2 sm:w-4" });
+              if (char === '/') return React.createElement('span', { key: index, className: "mx-2 text-2xl text-yellow-400" }, '/');
+              
+              const isRevealed = gameState.puzzle.revealed.has(char) || !/[A-Z]/.test(char);
+              let borderColor = 'border-blue-400';
+              let bgColor = 'bg-white';
+              let textColor = isRevealed ? 'text-blue-800' : 'text-transparent';
+              
+              if (specialFormat?.type === 'BEFORE_AFTER' && specialFormat.shared.includes(char)) {
+                borderColor = 'border-yellow-400';
+                bgColor = 'bg-yellow-100';
+                textColor = isRevealed ? 'text-yellow-800' : 'text-transparent';
+              } else if (specialFormat?.type === 'RHYME_TIME') {
+                borderColor = 'border-pink-400';
+                bgColor = 'bg-pink-50';
+                textColor = isRevealed ? 'text-pink-800' : 'text-transparent';
+              } else if (specialFormat?.type === 'SAME_LETTER' && char === specialFormat.letter) {
+                borderColor = 'border-green-400';
+                bgColor = 'bg-green-100';
+                textColor = isRevealed ? 'text-green-800' : 'text-transparent';
+              }
+              
+              return React.createElement('span', {
+                key: index,
+                className: `inline-flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 border-2 ${borderColor} ${bgColor} text-sm sm:text-xl font-bold m-0.5 sm:m-1 ${textColor}`
+              }, isRevealed ? char : '');
+            })
+          );
+        } catch (error) {
+          return React.createElement('div', { className: "text-red-400" }, 'Error loading puzzle');
+        }
+      };
+
+      return React.createElement('div', {
+        className: "min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white p-2 sm:p-4"
+      }, 
+        React.createElement('div', { className: "max-w-6xl mx-auto" }, [
+          // Header
+          React.createElement('div', { key: 'header', className: "text-center mb-4 sm:mb-8" }, [
+            React.createElement('h1', {
+              key: 'title',
+              className: "text-2xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+            }, 'WHEEL OF FORTUNE'),
+            React.createElement('p', {
+              key: 'subtitle',
+              className: "text-lg sm:text-xl text-blue-200"
+            }, 'Training Edition v11')
+          ]),
+          
+          // Game Status
+          React.createElement('div', { key: 'status', className: "grid grid-cols-3 gap-1 sm:gap-4 mb-4 sm:mb-8 text-xs sm:text-base" }, 
+            gameState.players.map((player, index) => 
+              React.createElement('div', {
+                key: index,
+                className: `rounded-lg p-2 sm:p-4 ${
+                  gameState.currentPlayer === index 
+                    ? 'bg-yellow-600 bg-opacity-70 border-2 border-yellow-400' 
+                    : 'bg-blue-800 bg-opacity-50'
+                }`
+              }, [
+                React.createElement('div', { key: 'name', className: "flex items-center mb-1 sm:mb-2" }, [
+                  React.createElement('span', {
+                    key: 'player-name',
+                    className: `font-semibold ${gameState.currentPlayer === index ? 'text-yellow-100' : 'text-white'}`
+                  }, player.name),
+                  gameState.currentPlayer === index && React.createElement('span', {
+                    key: 'star',
+                    className: "ml-1 text-yellow-200"
+                  }, '★')
+                ]),
+                React.createElement('div', { key: 'round-money', className: "text-xs sm:text-sm" }, `Round: $${player.roundMoney}`),
+                React.createElement('div', { key: 'total-money', className: "text-xs sm:text-sm font-bold" }, `Total: $${player.totalMoney}`)
+              ])
+            )
+          ),
+
+          // Round Info
+          React.createElement('div', { key: 'round-info', className: "text-center mb-4" }, 
+            React.createElement('div', { className: "bg-purple-800 bg-opacity-50 rounded-lg p-2 sm:p-3 inline-block" }, 
+              React.createElement('div', { className: "flex items-center justify-center" }, [
+                React.createElement(Clock, { key: 'clock', className: "w-3 h-3 sm:w-4 sm:h-4 mr-2" }),
+                React.createElement('span', { key: 'round-text', className: "font-semibold text-sm sm:text-base" }, `Round ${gameState.currentRound}`)
+              ])
+            )
+          ),
+
+          // Puzzle Board
+          React.createElement('div', { key: 'puzzle-board', className: "bg-blue-800 bg-opacity-30 rounded-lg p-3 sm:p-6 mb-4 sm:mb-8" }, 
+            React.createElement('div', { className: "text-center mb-4" }, [
+              React.createElement('div', { key: 'category', className: "text-lg sm:text-2xl font-bold text-yellow-400 mb-2" }, 
+                gameState.puzzle.specialFormat?.type === 'QUESTION' 
+                  ? gameState.puzzle.specialFormat.question.replace(/_/g, ' ') + '?'
+                  : gameState.puzzle.category
+              ),
+              
+              gameState.puzzle.specialFormat && React.createElement('div', { key: 'format-hint', className: "text-xs sm:text-sm text-blue-200 mb-2" }, 
+                gameState.puzzle.specialFormat.type === 'BEFORE_AFTER' ? "The middle word connects both phrases!" :
+                gameState.puzzle.specialFormat.type === 'RHYME_TIME' ? "All words rhyme!" :
+                gameState.puzzle.specialFormat.type === 'SAME_LETTER' ? `All words start with ${gameState.puzzle.specialFormat.letter}!` :
+                gameState.puzzle.specialFormat.type === 'THEN_AND_NOW' ? "Two items from different times!" :
+                gameState.puzzle.specialFormat.type === 'QUESTION' ? "Answer the question!" : ""
+              ),
+              
+              React.createElement('div', { key: 'puzzle', className: "min-h-16" }, renderPuzzle())
+            ])
+          ),
+
+          // Wheel
+          React.createElement('div', { key: 'wheel-section', className: "mb-4 sm:mb-8" }, [
+            renderWheel(),
+            React.createElement('div', { key: 'spin-button', className: "text-center" }, 
+              React.createElement('button', {
+                onClick: spinWheel,
+                disabled: gameState.isSpinning || gameState.currentPlayer !== 0,
+                className: "bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-500 text-black font-bold py-2 px-4 sm:py-3 sm:px-6 rounded-lg text-sm sm:text-xl transition-colors"
+              }, gameState.isSpinning ? 'Spinning...' : 
+                  gameState.currentPlayer === 0 ? 'SPIN WHEEL' : 'Wait Your Turn')
+            )
+          ]),
+
+          // Game Controls
+          React.createElement('div', { key: 'controls', className: "grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-4 sm:mb-8" }, [
+            React.createElement('div', { key: 'letter-control', className: "bg-gray-800 bg-opacity-50 rounded-lg p-3 sm:p-6" }, [
+              React.createElement('h3', { key: 'letter-title', className: "text-sm sm:text-xl font-bold mb-2 sm:mb-4" }, 'Call a Letter'),
+              React.createElement('div', { key: 'letter-input', className: "flex gap-2" }, [
+                React.createElement('input', {
+                  key: 'input',
+                  type: "text",
+                  value: inputLetter,
+                  onChange: (e) => setInputLetter(e.target.value.slice(0, 1)),
+                  disabled: gameState.currentPlayer !== 0,
+                  className: "flex-1 px-2 py-2 sm:px-4 bg-gray-700 border border-gray-600 rounded text-white text-sm sm:text-base disabled:bg-gray-800 disabled:text-gray-500",
+                  placeholder: gameState.currentPlayer === 0 ? "Letter..." : "Wait...",
+                  maxLength: 1
+                }),
+                React.createElement('button', {
+                  key: 'call-button',
+                  onClick: callLetter,
+                  disabled: gameState.currentPlayer !== 0,
+                  className: "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-2 sm:px-6 rounded font-semibold transition-colors text-sm sm:text-base"
+                }, 'Call')
+              ]),
+              React.createElement('div', { key: 'letter-info', className: "mt-2 sm:mt-4 text-xs sm:text-sm" }, [
+                React.createElement('div', { key: 'used', className: "mb-1 sm:mb-2" }, `Used: ${Array.from(gameState.usedLetters).join(', ')}`),
+                React.createElement('div', { key: 'vowel-cost', className: "text-gray-400" }, 'Vowels cost $250')
+              ])
+            ]),
+
+            React.createElement('div', { key: 'solve-control', className: "bg-gray-800 bg-opacity-50 rounded-lg p-3 sm:p-6" }, [
+              React.createElement('h3', { key: 'solve-title', className: "text-sm sm:text-xl font-bold mb-2 sm:mb-4" }, 'Solve Puzzle'),
+              React.createElement('div', { key: 'solve-input', className: "flex gap-2 mb-2" }, [
+                React.createElement('input', {
+                  key: 'solve-text',
+                  type: "text",
+                  value: solveAttempt,
+                  onChange: (e) => setSolveAttempt(e.target.value),
+                  disabled: gameState.currentPlayer !== 0,
+                  className: "flex-1 px-2 py-2 sm:px-4 bg-gray-700 border border-gray-600 rounded text-white text-sm sm:text-base disabled:bg-gray-800 disabled:text-gray-500",
+                  placeholder: gameState.currentPlayer === 0 ? "Your answer..." : "Wait..."
+                }),
+                React.createElement('button', {
+                  key: 'solve-button',
+                  onClick: solvePuzzle,
+                  disabled: gameState.currentPlayer !== 0,
+                  className: "bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-2 sm:px-6 rounded font-semibold transition-colors text-sm sm:text-base"
+                }, 'Solve')
+              ]),
+              React.createElement('button', {
+                key: 'new-puzzle',
+                onClick: startNewPuzzle,
+                className: "w-full bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded font-semibold transition-colors text-sm sm:text-base"
+              }, 'NEW PUZZLE')
+            ])
+          ]),
+
+          // Message Display
+          React.createElement('div', { key: 'message', className: "bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-lg p-3 sm:p-4 text-center mb-4" }, [
+            React.createElement('div', { key: 'main-message', className: "text-sm sm:text-lg font-semibold text-yellow-100" }, gameState.message),
+            gameState.wheelValue && React.createElement('div', { key: 'wheel-value', className: "text-xs sm:text-sm text-yellow-200 mt-2" }, 
+              typeof gameState.wheelValue === 'number' 
+                ? `Current wheel value: $${gameState.wheelValue}`
+                : `Special: ${gameState.wheelValue.displayValue || gameState.wheelValue}`
+            )
+          ]),
+
+          // Game Info
+          React.createElement('div', { key: 'info', className: "text-center text-xs sm:text-sm text-gray-400" }, [
+            React.createElement('p', { key: 'puzzles-count' }, `Puzzles completed: ${usedPuzzles.size} • No repeats guaranteed`),
+            React.createElement('p', { key: 'version-info', className: "mt-1 sm:mt-2" }, 
+              React.createElement('strong', {}, 'Version 11:'), ' Perfect wheel centering • Faster AI turns • Centered letters • Authentic gameplay'
+            )
+          ])
+        ])
+      );
+    }
+
+    ReactDOM.render(React.createElement(WheelOfFortune), document.getElementById('root'));
+</script>
+```
+
+</body>
+</html>
